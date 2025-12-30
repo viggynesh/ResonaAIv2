@@ -166,13 +166,18 @@ export default function PremiumVoiceCloner({ onVoiceCloned }: PremiumVoiceCloner
 
       const cloneResult = await cloneResponse.json()
 
-      setCurrentStep("⚡ Optimizing voice model...")
+      if (cloneResult.isFallback) {
+        setCurrentStep("⚠️ Using default voice...")
+        setError(cloneResult.message || "Voice cloning unavailable. Using a default voice instead.")
+      } else {
+        setCurrentStep("⚡ Optimizing voice model...")
+      }
       setProgress(75)
 
       // Small delay for better UX
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      setCurrentStep("✨ Voice clone ready!")
+      setCurrentStep(cloneResult.isFallback ? "✨ Default voice ready!" : "✨ Voice clone ready!")
       setProgress(100)
 
       // Complete the process

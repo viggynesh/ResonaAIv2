@@ -23,7 +23,7 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
   const [isVisible, setIsVisible] = useState(false)
   const [waitingForUser, setWaitingForUser] = useState(false)
   const [aiPersonality, setAiPersonality] = useState<string>(
-    "You are a helpful AI assistant having a natural conversation.",
+    "Example: Patient's Name: Jake, Your goal is to help the patient reinforce memories of his wife Julia, assume you are Julia. Julia is...",
   )
 
   const recognitionRef = useRef<any>(null)
@@ -377,11 +377,11 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
             <div className="glass-dark border border-yellow-500/30 rounded-2xl p-6 mb-8">
               <div className="flex items-center mb-4">
                 <Settings className="w-6 h-6 text-yellow-400 mr-3" />
-                <h3 className="text-xl font-semibold text-white">AI Personality Setup</h3>
+                <h3 className="text-xl font-semibold text-white">Upload Knowledge Base</h3>
               </div>
               <div className="space-y-3">
                 <Label htmlFor="personality" className="text-gray-300 text-sm font-medium">
-                  Define how the AI should behave (e.g., "You are a master chef", "You are a fitness trainer")
+                  Please list all memory cues that the AI should actively reinforce with the patient.
                 </Label>
                 <Input
                   id="personality"
