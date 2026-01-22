@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.1-70b-versatile",
+        model: "llama3-70b-8192",
         messages: [
           {
             role: "user",
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
       success: true,
       message: "Groq API is working!",
       testResponse: testResponse,
-      model: "llama-3.1-70b-versatile",
+      model: "llama3-70b-8192",
       keyUsed: groqApiKey.substring(0, 20) + "...",
     })
   } catch (error) {

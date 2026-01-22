@@ -5,7 +5,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Upload, Mic, Square, Play, Pause, Loader2, AlertCircle, Sparkles, Zap, CheckCircle, Clock } from "lucide-react"
+import {
+  Upload,
+  Mic,
+  Square,
+  Play,
+  Pause,
+  Loader2,
+  AlertCircle,
+  Sparkles,
+  Zap,
+  CheckCircle,
+  Clock,
+  FastForward,
+} from "lucide-react"
 
 interface PremiumVoiceClonerProps {
   onVoiceCloned: (voiceId: string, audioUrl: string) => void
@@ -191,6 +204,34 @@ export default function PremiumVoiceCloner({ onVoiceCloned }: PremiumVoiceCloner
     }
   }
 
+  const useDefaultVoice = async () => {
+    setIsProcessing(true)
+    setProgress(0)
+    setError(null)
+
+    try {
+      setCurrentStep("🎤 Using default voice...")
+      setProgress(50)
+
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      // Use a popular ElevenLabs voice ID as default
+      const defaultVoiceId = "21m00Tcm4TlvDq8ikWAM" // Rachel voice
+      const defaultAudioUrl = "/default-voice-sample.mp3"
+
+      setCurrentStep("✨ Default voice ready!")
+      setProgress(100)
+
+      setTimeout(() => {
+        onVoiceCloned(defaultVoiceId, defaultAudioUrl)
+      }, 1000)
+    } catch (error) {
+      console.error("Default voice error:", error)
+      setError("Failed to use default voice")
+      setIsProcessing(false)
+    }
+  }
+
   return (
     <Card className="glass-dark border-yellow-500/30 shadow-2xl glow-gold">
       <CardHeader className="pb-6">
@@ -221,6 +262,25 @@ export default function PremiumVoiceCloner({ onVoiceCloned }: PremiumVoiceCloner
 
         {!isProcessing && (
           <>
+            <div className="text-center">
+              <Button
+                onClick={useDefaultVoice}
+                size="lg"
+                variant="outline"
+                className="border-2 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 px-8 py-6 text-lg font-semibold rounded-2xl bg-transparent"
+              >
+                <FastForward className="w-5 h-5 mr-3" />
+                Use Default Voice (Skip Cloning)
+              </Button>
+              <p className="text-gray-400 text-sm mt-3">Skip voice cloning and use a pre-configured voice</p>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-yellow-500/50 to-transparent"></div>
+              <span className="text-gray-400 font-medium px-4">OR CLONE A CUSTOM VOICE</span>
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-yellow-500/50 to-transparent"></div>
+            </div>
+
             {/* Upload Section */}
             <div
               className="glass-dark border-2 border-dashed border-yellow-500/30 rounded-2xl p-12 text-center cursor-pointer hover:border-yellow-400/50 transition-all duration-300 group"
@@ -232,7 +292,9 @@ export default function PremiumVoiceCloner({ onVoiceCloned }: PremiumVoiceCloner
                 </div>
                 <div>
                   <h3 className="text-2xl font-bold text-white mb-3">Upload Audio Sample</h3>
-                  <p className="text-gray-400 text-lg">Drop your audio file here or click to browse</p>
+                  <p className="text-gray-400 text-lg">
+                    Please upload a short audio recording of the target voice to be reinforced for the patient.
+                  </p>
                   <p className="text-gray-500 text-sm mt-2">Supports MP3, WAV, M4A • Minimum 10 seconds recommended</p>
                 </div>
               </div>

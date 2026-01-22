@@ -6,7 +6,21 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Mic, MicOff, Phone, PhoneOff, Volume2, User, Bot, Sparkles, Zap, Settings } from "lucide-react"
+import {
+  Mic,
+  MicOff,
+  Phone,
+  PhoneOff,
+  Volume2,
+  User,
+  Bot,
+  Sparkles,
+  Zap,
+  Settings,
+  Smile,
+  AlertTriangle,
+} from "lucide-react"
+import { useEmotionDetection } from "@/hooks/use-emotion-detection"
 
 interface PremiumVoiceChatProps {
   voiceId: string
@@ -26,6 +40,8 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
     "Example: Patient's Name: Jake, Your goal is to help the patient reinforce memories of his wife Julia, assume you are Julia. Julia is...",
   )
 
+  const { currentEmotion, isModelLoaded, loadingError, videoRef, canvasRef } = useEmotionDetection(true)
+
   const recognitionRef = useRef<any>(null)
   const isProcessingRef = useRef(false)
   const shouldContinueListeningRef = useRef(false)
@@ -36,19 +52,32 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
     setIsVisible(true)
   }, [])
 
-  // Cleanup voice when component unmounts
-  useEffect(() => {
-    return () => {
-      if (voiceId && !voiceId.startsWith("mock-voice-")) {
-        // Cleanup the voice when chat ends
-        fetch("/api/cleanup-voice", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ voiceId }),
-        }).catch(console.error)
-      }
+  const shouldModifyResponse = (emotion: string | undefined) => {
+    if (!emotion) return false
+    const lowerEmotion = emotion.toLowerCase()
+    return lowerEmotion === "sad" || lowerEmotion === "angry"
+  }
+
+  const getEmotionColor = (emotion: string | undefined) => {
+    if (!emotion) return "bg-gray-500/20 text-gray-300 border-gray-500/30"
+    const lowerEmotion = emotion.toLowerCase()
+    switch (lowerEmotion) {
+      case "happy":
+        return "bg-green-500/20 text-green-300 border-green-500/30"
+      case "sad":
+        return "bg-blue-500/20 text-blue-300 border-blue-500/30"
+      case "angry":
+        return "bg-red-500/20 text-red-300 border-red-500/30"
+      case "fearful":
+        return "bg-purple-500/20 text-purple-300 border-purple-500/30"
+      case "disgusted":
+        return "bg-yellow-500/20 text-yellow-300 border-yellow-500/30"
+      case "surprised":
+        return "bg-pink-500/20 text-pink-300 border-pink-500/30"
+      default:
+        return "bg-gray-500/20 text-gray-300 border-gray-500/30"
     }
-  }, [voiceId])
+  }
 
   useEffect(() => {
     const initSpeechRecognition = () => {
@@ -66,13 +95,11 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
           setError(null)
           setWaitingForUser(false)
 
-          // Clear any existing timeout
           if (listeningTimeoutRef.current) {
             clearTimeout(listeningTimeoutRef.current)
             listeningTimeoutRef.current = null
           }
 
-          // Set 6-7 second timeout for listening
           listeningTimeoutRef.current = setTimeout(() => {
             console.log("⏰ 6-7 second listening timeout reached")
             if (recognitionRef.current && isListening) {
@@ -81,20 +108,18 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
               setIsListening(false)
               shouldContinueListeningRef.current = false
             }
-          }, 6500) // 6.5 seconds
+          }, 6500)
         }
 
         recognition.onend = () => {
           console.log("🎤 Speech recognition ended")
           setIsListening(false)
 
-          // Clear listening timeout
           if (listeningTimeoutRef.current) {
             clearTimeout(listeningTimeoutRef.current)
             listeningTimeoutRef.current = null
           }
 
-          // Only restart if we should continue listening and not currently processing
           if (shouldContinueListeningRef.current && !isProcessingRef.current && !isSpeaking) {
             console.log("🔄 Restarting speech recognition...")
             setTimeout(() => {
@@ -113,13 +138,11 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
           const transcript = event.results[event.results.length - 1][0].transcript.trim()
           console.log("🗣️ User said:", transcript)
 
-          // Clear any waiting timeout
           if (waitTimeoutRef.current) {
             clearTimeout(waitTimeoutRef.current)
             waitTimeoutRef.current = null
           }
 
-          // Clear listening timeout
           if (listeningTimeoutRef.current) {
             clearTimeout(listeningTimeoutRef.current)
             listeningTimeoutRef.current = null
@@ -153,11 +176,9 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
                 await playClonedVoiceAudio(aiResponse.audioUrl)
               }
 
-              // After AI response, start listening again for 6-7 seconds
               console.log("🎤 Starting post-response listening period...")
               setWaitingForUser(true)
 
-              // Small delay before starting recognition again
               setTimeout(() => {
                 if (shouldContinueListeningRef.current && !isProcessingRef.current) {
                   try {
@@ -181,23 +202,19 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
         recognition.onerror = (event: any) => {
           console.error("❌ Speech recognition error:", event.error)
 
-          // Clear timeouts
           if (listeningTimeoutRef.current) {
             clearTimeout(listeningTimeoutRef.current)
             listeningTimeoutRef.current = null
           }
 
-          // Handle "no-speech" error gracefully by just pausing instead of showing error
           if (event.error === "no-speech") {
             console.log("🔇 No speech detected, pausing recognition")
             setIsListening(false)
             setWaitingForUser(false)
             isProcessingRef.current = false
-            // Don't set error state for no-speech
             return
           }
 
-          // For other errors, show the error message
           setError(`Speech recognition error: ${event.error}`)
           setIsListening(false)
           setWaitingForUser(false)
@@ -302,6 +319,7 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
           personality: aiPersonality,
           voiceId: voiceId,
           audioEnabled: true,
+          emotion: currentEmotion?.emotion || "neutral",
         }),
       })
 
@@ -350,7 +368,7 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
       >
         <div className="flowing-line mb-6">
           <h2 className="text-5xl font-bold text-white mb-4">
-            Chat with Your <span className="gradient-gold">AI Assistant</span>
+            Begin AI-powered <span className="gradient-gold">Reinforcement Therapy</span>
           </h2>
         </div>
         <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
@@ -372,7 +390,6 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
           </CardTitle>
         </CardHeader>
         <CardContent className="p-8">
-          {/* AI Personality Configuration */}
           {!isActive && (
             <div className="glass-dark border border-yellow-500/30 rounded-2xl p-6 mb-8">
               <div className="flex items-center mb-4">
@@ -394,7 +411,66 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
             </div>
           )}
 
-          {/* Voice Clone Status */}
+          <div className="glass-dark border border-purple-500/30 rounded-2xl p-6 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-4">
+                <Smile className="w-6 h-6 text-purple-400" />
+                <span className="text-xl font-semibold text-purple-300">Emotion Recognition</span>
+              </div>
+              <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                {isModelLoaded ? "Active" : loadingError ? "Failed" : "Loading..."}
+              </Badge>
+            </div>
+
+            {loadingError && (
+              <div className="text-red-400 mb-4 flex items-center space-x-2">
+                <AlertTriangle className="w-5 h-5" />
+                <span>{loadingError}</span>
+              </div>
+            )}
+
+            {isModelLoaded && !loadingError && (
+              <>
+                <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-4">
+                  <video
+                    ref={videoRef}
+                    width="640"
+                    height="480"
+                    className="w-full h-full object-cover"
+                    autoPlay
+                    playsInline
+                    muted
+                  />
+                  <canvas ref={canvasRef} width="640" height="480" className="absolute top-0 left-0 w-full h-full" />
+
+                  {currentEmotion && (
+                    <div className="absolute top-4 left-4">
+                      <Badge
+                        className={`${getEmotionColor(currentEmotion.emotion)} px-4 py-2 text-lg font-bold capitalize`}
+                      >
+                        {currentEmotion.emotion}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+
+                {currentEmotion && shouldModifyResponse(currentEmotion.emotion) && (
+                  <div className="glass-dark border border-yellow-500/30 rounded-lg p-4 flex items-center space-x-3">
+                    <Zap className="w-5 h-5 text-yellow-400 animate-pulse" />
+                    <p className="text-yellow-300 font-semibold">Modifying AI's response</p>
+                  </div>
+                )}
+
+                {currentEmotion && !shouldModifyResponse(currentEmotion.emotion) && (
+                  <p className="text-purple-300">
+                    Detected: <span className="capitalize font-semibold">{currentEmotion.emotion}</span> (
+                    {(currentEmotion.confidence * 100).toFixed(0)}%)
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
           <div className="glass-dark border border-green-500/30 rounded-2xl p-6 mb-8">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-4">
@@ -409,14 +485,12 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
             <audio controls src={sampleAudioUrl} className="w-full h-10 rounded-lg" />
           </div>
 
-          {/* Error Display */}
           {error && (
             <div className="glass-dark border border-red-500/30 rounded-2xl p-6 mb-8">
               <p className="text-red-300 text-lg">{error}</p>
             </div>
           )}
 
-          {/* Chat Status */}
           <div className="text-center mb-8">
             <div
               className={`w-28 h-28 mx-auto rounded-full flex items-center justify-center mb-6 transition-all duration-300 cursor-pointer ${
@@ -461,11 +535,10 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
                     : waitingForUser
                       ? "Click the mic to continue or wait for auto-listen"
                       : "Click the mic above or speak to continue"
-                : "Configure AI personality above, then start the conversation"}
+                : "Upload knowledge base above, and click start conversation"}
             </p>
           </div>
 
-          {/* Current Response */}
           {currentResponse && (
             <div className="glass-dark border border-blue-500/30 rounded-2xl p-6 mb-8">
               <div className="flex items-center mb-3">
@@ -476,7 +549,6 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
             </div>
           )}
 
-          {/* Messages */}
           {messages.length > 0 && (
             <div className="glass-dark rounded-2xl p-6 max-h-80 overflow-y-auto space-y-4 mb-8">
               <h4 className="text-xl font-semibold text-white mb-4 flex items-center">
@@ -519,7 +591,6 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
             </div>
           )}
 
-          {/* Controls */}
           <div className="space-y-4">
             {!isActive && (
               <Button
@@ -544,7 +615,6 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
             )}
           </div>
 
-          {/* Instructions */}
           <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
             <div className="glass-dark rounded-2xl p-6">
               <Mic className="w-8 h-8 text-yellow-400 mx-auto mb-3" />
@@ -557,15 +627,14 @@ export default function PremiumVoiceChat({ voiceId, sampleAudioUrl }: PremiumVoi
               <p className="text-gray-400 text-sm">AI responds with synthesized voice</p>
             </div>
             <div className="glass-dark rounded-2xl p-6">
-              <Sparkles className="w-8 h-8 text-blue-400 mx-auto mb-3" />
-              <p className="font-semibold text-white mb-2">Auto-Listen</p>
-              <p className="text-gray-400 text-sm">6-7 second listening window after AI responses</p>
+              <Smile className="w-8 h-8 text-purple-400 mx-auto mb-3" />
+              <p className="font-semibold text-white mb-2">Emotion Aware</p>
+              <p className="text-gray-400 text-sm">AI adjusts tone based on your facial expressions</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Attribution */}
       <div className="fixed bottom-4 right-4 z-50">
         <div className="glass-dark border border-yellow-500/30 rounded-xl px-4 py-2 shadow-lg">
           <div className="flex items-center space-x-2">

@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
 
     // Test Groq API
     const result = await generateText({
-      model: groq("llama-3.1-70b-versatile", {
+      model: groq("llama3-70b-8192", {
         apiKey: groqApiKey,
       }),
       prompt: "Say hello and confirm you're working!",
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       groq: {
         status: "success",
         response: result.text,
-        model: "llama-3.1-70b-versatile",
+        model: "llama3-70b-8192",
       },
       elevenlabs: elevenLabsTest,
       timestamp: new Date().toISOString(),
