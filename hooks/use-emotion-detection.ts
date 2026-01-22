@@ -7,6 +7,12 @@ export interface EmotionData {
   confidence: number
 }
 
+declare global {
+  interface Window {
+    faceapi: any
+  }
+}
+
 export function useEmotionDetection(isActive: boolean) {
   const [currentEmotion, setCurrentEmotion] = useState<EmotionData | null>(null)
   const [isModelLoaded, setIsModelLoaded] = useState(false)
@@ -15,46 +21,48 @@ export function useEmotionDetection(isActive: boolean) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const humanRef = useRef<any>(null)
+  const faceapiLoadedRef = useRef(false)
 
   useEffect(() => {
-    const loadHuman = async () => {
-      try {
-        console.log("[v0] Loading Human library...")
-        const Human = (await import("@vladmandic/human")).default
+    const loadFaceApi = async () => {
+      if (faceapiLoadedRef.current || window.faceapi) {
+        setIsModelLoaded(true)
+        return
+      }
 
-        const config = {
-          modelBasePath: "https://cdn.jsdelivr.net/npm/@vladmandic/human/models",
-          face: {
-            enabled: true,
-            detector: { rotation: false },
-            mesh: { enabled: false },
-            iris: { enabled: false },
-            description: { enabled: false },
-            emotion: { enabled: true },
-          },
-          body: { enabled: false },
-          hand: { enabled: false },
-          object: { enabled: false },
-          gesture: { enabled: false },
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement("script")
+          script.src = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/dist/face-api.min.js"
+          script.async = true
+          script.onload = () => resolve()
+          script.onerror = () => reject(new Error("Failed to load face-api.js"))
+          document.head.appendChild(script)
+        })
+
+        const faceapi = window.faceapi
+        if (!faceapi) {
+          throw new Error("face-api.js not loaded")
         }
 
-        humanRef.current = new Human(config)
+        const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/model"
 
-        console.log("[v0] Loading Human models...")
-        await humanRef.current.load()
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+        ])
 
-        console.log("[v0] Human library loaded successfully")
+        faceapiLoadedRef.current = true
         setIsModelLoaded(true)
         setLoadingError(null)
       } catch (error) {
-        console.error("[v0] Error loading Human library:", error)
+        console.error("Error loading face-api.js:", error)
         setLoadingError("Failed to load emotion detection")
         setIsModelLoaded(false)
       }
     }
 
-    loadHuman()
+    loadFaceApi()
   }, [])
 
   useEffect(() => {
@@ -72,7 +80,6 @@ export function useEmotionDetection(isActive: boolean) {
 
   const startWebcam = async () => {
     try {
-      console.log("[v0] Starting webcam for emotion detection...")
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480, facingMode: "user" },
         audio: false,
@@ -90,7 +97,7 @@ export function useEmotionDetection(isActive: boolean) {
         }
       }
     } catch (error) {
-      console.error("[v0] Error accessing webcam:", error)
+      console.error("Error accessing webcam:", error)
       setLoadingError("Failed to access webcam")
     }
   }
@@ -100,29 +107,39 @@ export function useEmotionDetection(isActive: boolean) {
       clearInterval(detectionIntervalRef.current)
     }
 
-    console.log("[v0] Starting emotion detection interval...")
     detectionIntervalRef.current = setInterval(async () => {
       await detectEmotion()
-    }, 1000)
+    }, 500)
   }
 
   const detectEmotion = async () => {
-    const human = humanRef.current
-    if (!human || !videoRef.current || !canvasRef.current) return
+    const faceapi = window.faceapi
+    if (!faceapi || !videoRef.current || !canvasRef.current) return
 
     try {
       if (videoRef.current.readyState !== 4) return
 
-      const result = await human.detect(videoRef.current)
+      const detections = await faceapi
+        .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
+        .withFaceExpressions()
 
-      if (result.face && result.face.length > 0 && result.face[0].emotion) {
-        const emotions = result.face[0].emotion
-
-        // Find dominant emotion
+      if (detections && detections.expressions) {
+        const expressions = detections.expressions
+        
         let dominantEmotion = "neutral"
         let maxScore = 0
 
-        for (const [emotion, score] of Object.entries(emotions)) {
+        const emotionMap: Record<string, number> = {
+          neutral: expressions.neutral || 0,
+          happy: expressions.happy || 0,
+          sad: expressions.sad || 0,
+          angry: expressions.angry || 0,
+          fearful: expressions.fearful || 0,
+          disgusted: expressions.disgusted || 0,
+          surprised: expressions.surprised || 0,
+        }
+
+        for (const [emotion, score] of Object.entries(emotionMap)) {
           if (score > maxScore) {
             maxScore = score
             dominantEmotion = emotion
@@ -134,28 +151,27 @@ export function useEmotionDetection(isActive: boolean) {
           confidence: maxScore,
         })
 
-        // Draw on canvas
         const context = canvasRef.current.getContext("2d")
         if (context) {
-          context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-
-          // Draw results using Human's draw methods
-          if (human.draw) {
-            await human.draw.face(canvasRef.current, result.face)
+          const displaySize = {
+            width: videoRef.current.videoWidth,
+            height: videoRef.current.videoHeight,
           }
+          faceapi.matchDimensions(canvasRef.current, displaySize)
+          context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+          
+          const resizedDetections = faceapi.resizeResults(detections, displaySize)
+          faceapi.draw.drawDetections(canvasRef.current, resizedDetections)
         }
       } else {
         setCurrentEmotion({ emotion: "neutral", confidence: 0.5 })
       }
-    } catch (error) {
+    } catch {
       // Silently handle errors
-      console.log("[v0] Detection skipped")
     }
   }
 
   const stopDetection = () => {
-    console.log("[v0] Stopping emotion detection...")
-
     if (detectionIntervalRef.current) {
       clearInterval(detectionIntervalRef.current)
       detectionIntervalRef.current = null

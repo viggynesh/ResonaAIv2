@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { generateText } from "ai"
-import { createGroq } from "@ai-sdk/groq"
+import { groq } from "@ai-sdk/groq"
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,19 +9,6 @@ export async function POST(request: NextRequest) {
     if (!messages || !personality) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
     }
-
-    console.log("💬 Chat request with voiceId:", voiceId)
-    console.log("😊 Detected emotion:", emotion)
-
-    // Check if Groq API key exists
-    if (!process.env.GROQ_API_KEY) {
-      console.error("GROQ_API_KEY environment variable is not set")
-      return NextResponse.json({ error: "Groq API key not configured" }, { status: 500 })
-    }
-
-    const groq = createGroq({
-      apiKey: process.env.GROQ_API_KEY,
-    })
 
     // Get the last user message
     const lastUserMessage = messages[messages.length - 1]
@@ -57,28 +44,21 @@ Instructions:
 Respond naturally and helpfully with the appropriate emotional tone, acknowledging their feelings when appropriate.
 `
 
-    console.log("🤖 Generating Groq response...")
-
     const result = await generateText({
-      model: groq("llama3-70b-8192"),
+      model: groq("llama-3.3-70b-versatile"),
       prompt: lastUserMessage.content,
       system: systemPrompt,
       maxTokens: 150,
     })
-
-    console.log("💬 Groq response:", result.text)
 
     let audioUrl = null
 
     // Generate audio with ElevenLabs if enabled and voiceId is available
     if (audioEnabled && voiceId && !voiceId.startsWith("mock-voice-")) {
       try {
-        console.log("🗣️ Generating audio response...")
         audioUrl = await generateElevenLabsAudio(result.text, voiceId)
-        console.log("🎵 Audio generated:", audioUrl ? "Success" : "Failed")
       } catch (audioError) {
-        console.error("❌ Audio generation failed:", audioError)
-        // Continue without audio if generation fails
+        console.error("Audio generation failed:", audioError)
       }
     }
 
@@ -88,7 +68,7 @@ Respond naturally and helpfully with the appropriate emotional tone, acknowledgi
       voiceId: voiceId.startsWith("mock-voice-") ? null : voiceId,
     })
   } catch (error) {
-    console.error("❌ Chat error:", error)
+    console.error("Chat error:", error)
 
     if (error instanceof Error && error.message.includes("401")) {
       return NextResponse.json({ error: "Invalid Groq API key" }, { status: 401 })
@@ -128,13 +108,10 @@ function getEmotionContext(emotion: string): string {
 
 async function generateElevenLabsAudio(text: string, voiceId: string): Promise<string | null> {
   try {
-    // Check if API key exists
     if (!process.env.ELEVENLABS_API_KEY) {
-      console.warn("ElevenLabs API key not configured, skipping audio generation")
       return null
     }
 
-    // Handle API key - ElevenLabs keys start with sk_
     let elevenLabsApiKey: string
     const rawKey = process.env.ELEVENLABS_API_KEY
 
@@ -143,13 +120,10 @@ async function generateElevenLabsAudio(text: string, voiceId: string): Promise<s
     } else {
       try {
         elevenLabsApiKey = Buffer.from(rawKey, "base64").toString("utf-8")
-      } catch (decodeError) {
-        console.error("Failed to decode ElevenLabs API key:", decodeError)
+      } catch {
         return null
       }
     }
-
-    console.log("🗣️ Calling ElevenLabs TTS with voice:", voiceId)
 
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: "POST",
@@ -170,22 +144,14 @@ async function generateElevenLabsAudio(text: string, voiceId: string): Promise<s
       }),
     })
 
-    console.log("📡 ElevenLabs TTS response:", response.status)
-
     if (!response.ok) {
-      console.warn(`ElevenLabs TTS error: ${response.status}`)
-      const errorText = await response.text()
-      console.error("ElevenLabs error details:", errorText)
       return null
     }
 
     const audioBuffer = await response.arrayBuffer()
-
-    // Convert to base64 data URL for client-side playback
     const base64Audio = Buffer.from(audioBuffer).toString("base64")
     return `data:audio/mpeg;base64,${base64Audio}`
-  } catch (error) {
-    console.error("❌ ElevenLabs audio generation error:", error)
+  } catch {
     return null
   }
 }
